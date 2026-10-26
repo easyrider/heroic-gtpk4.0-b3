@@ -1,6 +1,9 @@
-# Game Porting Toolkit (GPTK) 4.0 Beta 2 for Heroic Games Launcher
+# Game Porting Toolkit (GPTK) 4.0 Beta 3 for Heroic Games Launcher
 
-This repository automates the installation and integration of **Apple Game Porting Toolkit 4.0 Beta 2** into **Heroic Games Launcher** using an existing GPTK base (such as `GPTK-3.0-3`).
+This is a fork of: https://github.com/Maxyme/heroic-gtpk4.0-b2
+I have update the script to handle beta 3
+
+This repository automates the installation and integration of **Apple Game Porting Toolkit 4.0 Beta 3** into **Heroic Games Launcher** using an existing GPTK base (such as `Game-Porting-Toolkit-3.0-3`).
 
 ---
 
@@ -10,10 +13,10 @@ This repository automates the installation and integration of **Apple Game Porti
 * **Heroic Games Launcher**: Installed from [heroicgameslauncher.com](https://heroicgameslauncher.com).
 * **Base GPTK Runner in Heroic**:
   * In Heroic, open **Wine Manager** (Wine icon on left).
-  * Download the latest GPTK version available (e.g., **`GPTK-3.0-3`**).
-* **GPTK 4.0 Beta 2 DMG**:
-  * Download **Game Porting Toolkit 4.0 Beta 2** from [Apple Developer Downloads](https://developer.apple.com/download/all/).
-  * Double-click the DMG to mount it (mounts at `/Volumes/Game Porting Toolkit 4.0 Beta 2`).
+  * Download the latest GPTK version available (e.g., **`Game-Porting-Toolkit-3.0-3`**).
+* **GPTK 4.0 Beta 3 DMG**:
+  * Download **Evaluation environment for Windows games 4.0 beta 3** from [Apple Developer Downloads](https://developer.apple.com/download/all/).
+  * Double-click the DMG to mount it (mounts at `/Volumes/Evaluation environment for Windows games 4.0 beta 3`).
 * **Winetricks**:
   * Install via Homebrew: `brew install winetricks`  
   *(Or use the Winetricks tool built directly into Heroic's UI)*.
@@ -31,19 +34,19 @@ chmod +x install_gptk4_heroic.sh patch_gptk.py
 ```
 
 The script automatically:
-1. Detects your mounted GPTK 4.0 Beta 2 DMG.
-2. Finds your `GPTK-3.0-3` runner in Heroic and clones it to `GPTK-4.0-Beta`.
-3. Patches all 6 GPTK 4.0 Windows DLLs for ABI compatibility.
-4. Copies `D3DMetal.framework`, `libd3dshared.dylib`, and the patched DLLs into the new runner.
+1. Detects your mounted GPTK 4.0 Beta 3 volume.
+2. Finds your existing GPTK runner in Heroic and clones it to `GPTK-4.0-Beta`.
+3. Patches the 6 GPTK 4.0 Windows DLLs for ABI compatibility.
+4. Mirrors the volume's `redist/lib` (`external/D3DMetal.framework`, `external/libd3dshared.dylib`, unix stubs, DLLs) into the runner's `wine/lib`, then overlays the patched DLLs.
 
 ---
 
 ## Manual Step-by-Step Instructions
 
-### 1. Clone your GPTK 3.0-3 Base Runner
+### 1. Clone your Base GPTK Runner
 ```bash
-cd "$HOME/Library/Application Support/Heroic/tools/wine"
-cp -R GPTK-3.0-3 GPTK-4.0-Beta
+cd "$HOME/Library/Application Support/Heroic/tools/game-porting-toolkit"
+cp -R "Game-Porting-Toolkit-3.0-3" GPTK-4.0-Beta
 ```
 *(Always clone an existing GPTK runner rather than creating an empty folder so Wine binaries and Apple's Rosetta `%gs` context handlers are preserved)*.
 
@@ -53,19 +56,22 @@ cp -R GPTK-3.0-3 GPTK-4.0-Beta
 Run the included patcher:
 ```bash
 cd ~/Code/heroic-gtpk4.0-b2
-python3 patch_gptk.py --dmg "/Volumes/Game Porting Toolkit 4.0 Beta 2" --out "./patched_dlls"
+python3 patch_gptk.py --dmg "/Volumes/Evaluation environment for Windows games 4.0 beta 3" --out "./patched_dlls"
 ```
 
 ### 3. Inject GPTK 4.0 Files into the Runner
 ```bash
-RUNNER="$HOME/Library/Application Support/Heroic/tools/wine/GPTK-4.0-Beta"
+VOLUME="/Volumes/Evaluation environment for Windows games 4.0 beta 3"
+RUNNER="$HOME/Library/Application Support/Heroic/tools/game-porting-toolkit/GPTK-4.0-Beta"
+WINE_LIB="$RUNNER/Contents/Resources/wine/lib"
 
-# Copy native macOS frameworks
-cp -R "/Volumes/Game Porting Toolkit 4.0 Beta 2/redist/lib/D3DMetal.framework" "$RUNNER/lib/"
-cp "/Volumes/Game Porting Toolkit 4.0 Beta 2/redist/lib/libd3dshared.dylib" "$RUNNER/lib/"
+# Mirror Apple's redist layout (external/D3DMetal.framework, libd3dshared.dylib, unix stubs, DLLs)
+rm -rf "$WINE_LIB/external/D3DMetal.framework"
+ditto "$VOLUME/redist/lib" "$WINE_LIB"
 
-# Copy patched Windows DLLs
-cp ./patched_dlls/*.dll "$RUNNER/lib/wine/x86_64-windows/"
+# Overlay patched Windows DLLs
+cp ./patched_dlls/*.dll "$WINE_LIB/wine/x86_64-windows/"
+cp ./patched_dlls/nvngx-on-metalfx.dll "$WINE_LIB/wine/x86_64-windows/nvngx.dll"
 ```
 
 ---

@@ -11,6 +11,9 @@ import sys
 import glob
 import argparse
 
+DEFAULT_DMG_PATH = "/Volumes/Evaluation environment for Windows games 4.0 beta 3"
+WINDOWS_DLL_SUBDIR = os.path.join("redist", "lib", "wine", "x86_64-windows")
+
 DLL_TARGETS = [
     "d3d10.dll",
     "d3d11.dll",
@@ -28,8 +31,17 @@ NEW_OPCODE = b"\x48\x89\xf0"  # movq %rsi, %rax
 
 
 def find_default_dmg():
-    matches = glob.glob("/Volumes/Game Porting Toolkit*")
-    return matches[0] if matches else None
+    if os.path.isdir(DEFAULT_DMG_PATH):
+        return DEFAULT_DMG_PATH
+
+    for pattern in (
+        "/Volumes/Evaluation environment for Windows games*",
+        "/Volumes/Game Porting Toolkit*",
+    ):
+        matches = glob.glob(pattern)
+        if matches:
+            return matches[0]
+    return None
 
 
 def patch_file(src_path, dst_path):
@@ -59,20 +71,25 @@ def main():
         print("[!] Error: GPTK DMG volume not found. Please mount the DMG or provide --dmg <path>", file=sys.stderr)
         sys.exit(1)
 
+    dll_dir = os.path.join(dmg_path, WINDOWS_DLL_SUBDIR)
+    if not os.path.isdir(dll_dir):
+        print(f"[!] Error: Windows DLL directory not found: {dll_dir}", file=sys.stderr)
+        sys.exit(1)
+
     out_dir = os.path.abspath(args.out)
     os.makedirs(out_dir, exist_ok=True)
 
     print(f"[*] Reading from DMG: {dmg_path}")
+    print(f"[*] Windows DLL source: {dll_dir}")
     print(f"[*] Output directory: {out_dir}\n")
 
     success_count = 0
     for dll_name in DLL_TARGETS:
-        matches = glob.glob(f"{dmg_path}/**/{dll_name}", recursive=True)
-        if not matches:
-            print(f"[-] Warning: '{dll_name}' not found in DMG. Skipping.")
+        src = os.path.join(dll_dir, dll_name)
+        if not os.path.isfile(src):
+            print(f"[-] Warning: '{dll_name}' not found in {dll_dir}. Skipping.")
             continue
 
-        src = matches[0]
         dst = os.path.join(out_dir, dll_name)
         str_count, op_count = patch_file(src, dst)
         print(f"[+] {dll_name}:")

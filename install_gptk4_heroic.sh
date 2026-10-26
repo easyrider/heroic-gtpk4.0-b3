@@ -9,12 +9,15 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HEROIC_TOOLS="$HOME/Library/Application Support/Heroic/tools/wine"
+HEROIC_TOOLS="$HOME/Library/Application Support/Heroic/tools/game-porting-toolkit"
 TARGET_RUNNER="$HEROIC_TOOLS/GPTK-4.0-Beta"
+RUNNER_WINE_LIB="$TARGET_RUNNER/Contents/Resources/wine/lib"
+RUNNER_WINDOWS_DLLS="$RUNNER_WINE_LIB/wine/x86_64-windows"
 PATCHED_DLL_DIR="$SCRIPT_DIR/patched_dlls"
+DEFAULT_GPTK_VOLUME="/Volumes/Evaluation environment for Windows games 4.0 beta 3"
 
 echo -e "${BLUE}======================================================${NC}"
-echo -e "${BLUE}   GPTK 4.0 Beta 2 -> Heroic Wine Runner Installer    ${NC}"
+echo -e "${BLUE}   GPTK 4.0 Beta 3 -> Heroic Wine Runner Installer    ${NC}"
 echo -e "${BLUE}======================================================${NC}"
 
 # 1. Check Python 3
@@ -23,16 +26,28 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-# 2. Check for mounted GPTK DMG
-echo -e "\n${BLUE}[1/5] Checking for mounted GPTK DMG...${NC}"
-DMG_PATH=$(find /Volumes -maxdepth 1 -name "Game Porting Toolkit*" 2>/dev/null | head -n 1)
+# 2. Check for mounted GPTK volume
+echo -e "\n${BLUE}[1/5] Checking for mounted GPTK 4.0 Beta 3 volume...${NC}"
+DMG_PATH="$DEFAULT_GPTK_VOLUME"
+if [ ! -d "$DMG_PATH" ]; then
+    DMG_PATH=$(find /Volumes -maxdepth 1 \( -name "Evaluation environment for Windows games*" -o -name "Game Porting Toolkit*" \) -print -quit 2>/dev/null)
+fi
 
 if [ -z "$DMG_PATH" ]; then
-    echo -e "${RED}[!] Error: No mounted Game Porting Toolkit DMG found in /Volumes.${NC}"
-    echo -e "${YELLOW}Please double-click and mount your 'Game Porting Toolkit 4.0 Beta 2' DMG first, then re-run this script.${NC}"
+    echo -e "${RED}[!] Error: No mounted GPTK volume found in /Volumes.${NC}"
+    echo -e "${YELLOW}Mount 'Evaluation environment for Windows games 4.0 beta 3', then re-run this script.${NC}"
     exit 1
 fi
-echo -e "${GREEN}[✓] Found mounted DMG at:${NC} $DMG_PATH"
+
+WINDOWS_DLLS_SRC="$DMG_PATH/redist/lib/wine/x86_64-windows"
+EXTERNAL_LIBS_SRC="$DMG_PATH/redist/lib/external"
+
+if [ ! -f "$WINDOWS_DLLS_SRC/d3d10.dll" ] || [ ! -d "$EXTERNAL_LIBS_SRC/D3DMetal.framework" ] || [ ! -f "$EXTERNAL_LIBS_SRC/libd3dshared.dylib" ]; then
+    echo -e "${RED}[!] Error: Unexpected GPTK volume layout at:${NC} $DMG_PATH"
+    echo -e "${YELLOW}Expected redist/lib/wine/x86_64-windows and redist/lib/external.${NC}"
+    exit 1
+fi
+echo -e "${GREEN}[✓] Found mounted GPTK volume at:${NC} $DMG_PATH"
 
 # 3. Locate existing Apple GPTK Wine base (prioritizing GPTK-3.0-3)
 echo -e "\n${BLUE}[2/5] Locating base Apple GPTK Wine runner in Heroic...${NC}"
@@ -95,21 +110,18 @@ python3 "$SCRIPT_DIR/patch_gptk.py" --dmg "$DMG_PATH" --out "$PATCHED_DLL_DIR"
 # 6. Copy native frameworks & patched DLLs into the runner
 echo -e "\n${BLUE}[5/5] Injecting GPTK 4.0 libraries into runner...${NC}"
 
-# Ensure lib directories exist
-mkdir -p "$TARGET_RUNNER/lib"
-mkdir -p "$TARGET_RUNNER/lib/wine/x86_64-windows"
+# Mirror Apple's redist layout: external/ (D3DMetal, libd3dshared), unix stubs, Windows DLLs
+echo "[*] Copying GPTK redist libraries into runner wine/lib..."
+rm -rf "$RUNNER_WINE_LIB/external/D3DMetal.framework"
+ditto "$DMG_PATH/redist/lib" "$RUNNER_WINE_LIB"
 
-# Copy native macOS frameworks
-echo "[*] Copying D3DMetal.framework and libd3dshared.dylib..."
-cp -R "$DMG_PATH/redist/lib/D3DMetal.framework" "$TARGET_RUNNER/lib/"
-cp "$DMG_PATH/redist/lib/libd3dshared.dylib" "$TARGET_RUNNER/lib/"
-
-# Copy patched Windows DLLs
+# Overlay patched Windows DLLs
 echo "[*] Copying patched PE DLLs to runner windows library directory..."
-cp "$PATCHED_DLL_DIR"/*.dll "$TARGET_RUNNER/lib/wine/x86_64-windows/"
+cp "$PATCHED_DLL_DIR"/*.dll "$RUNNER_WINDOWS_DLLS/"
+cp "$PATCHED_DLL_DIR/nvngx-on-metalfx.dll" "$RUNNER_WINDOWS_DLLS/nvngx.dll"
 
 echo -e "\n${GREEN}======================================================${NC}"
-echo -e "${GREEN}  ✓ GPTK 4.0 Beta 2 has been successfully installed!  ${NC}"
+echo -e "${GREEN}  ✓ GPTK 4.0 Beta 3 has been successfully installed!  ${NC}"
 echo -e "${GREEN}======================================================${NC}"
 echo -e "\n${BLUE}How to use in Heroic Games Launcher:${NC}"
 echo -e "1. Restart Heroic (Quit with Cmd+Q and relaunch)."
